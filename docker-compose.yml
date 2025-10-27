@@ -1,0 +1,67 @@
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    environment:
+      - CLUSTER_NAME=test
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - hadoop_namenode:/hadoop/dfs/name
+    networks:
+      - hadoop
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+    volumes:
+      - hadoop_datanode:/hadoop/dfs/data
+    networks:
+      - hadoop
+
+  spark-master:
+    image: apache/spark:3.5.0 # Imagem do Spark.
+    container_name: spark-master
+    depends_on:
+      - namenode
+      - datanode
+    ports:
+      - "8080:8080" 
+      - "7077:7077" 
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+    networks:
+      - hadoop
+    environment:
+      - SPARK_MASTER_PORT=7077
+      - SPARK_MASTER_WEBUI_PORT=8080
+    command: bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.master.Master -h spark-master"
+
+  spark-worker:
+    image: apache/spark:3.5.0 # Imagem do Spark.
+    container_name: spark-worker-1
+    depends_on:
+      - spark-master
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+    networks:
+      - hadoop
+    environment:
+      - SPARK_MASTER_URL=spark://spark-master:7077 
+      - SPARK_WORKER_WEBUI_PORT=8081
+      - SPARK_WORKER_CORES=1
+      - SPARK_WORKER_MEMORY=1g
+    command: bash -c "/opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker $SPARK_MASTER_URL"
+
+volumes:
+  hadoop_namenode:
+  hadoop_datanode:
+
+networks:
+  hadoop:
+    driver: bridge
